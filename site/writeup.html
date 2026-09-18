@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Funding a local AI agent with an honest ad loop — Infyield</title>
+  <meta name="description" content="Why Infyield shows inline ads while its agent works, how the USD ledger stays honest, and what happens when the balance runs dry.">
+  <link rel="icon" href="./infyield-icon.jpg">
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+
+<article class="wrap writeup">
+  <h1>Funding a local AI agent with an honest ad loop</h1>
+  <p class="date">September 18, 2026 · by the Infyield maintainer</p>
+
+  <p>
+    Infyield is a coding agent that runs on your Mac: it reads and edits files,
+    runs shell commands, streams answers from large models, and keeps going
+    across a normal multi-turn conversation. It ships as a plain desktop app.
+    There is no subscription and no credit pack. The interesting part is how it
+    pays for itself, so that's what this post is about.
+  </p>
+
+  <h2>The problem with hiding the meter</h2>
+  <p>
+    Most AI tools meter usage in tokens or credits, which puts the user in an
+    awkward spot: you never quite know what a question costs until it's asked,
+    and the tool's incentives are to keep the pricing opaque. Infyield takes the
+    opposite trade. The agent is free to use, and the cost of every model call
+    is booked, visibly, against a ledger that lives on your own machine.
+  </p>
+  <p>
+    The ledger is the honest part. When the agent answers, the estimated token
+    cost is debited — model price in, model price out, real numbers. When an ad
+    is served, the impression credits the same ledger at the campaign's CPM. The
+    balance in between is not a marketing figure; it's the running truth of
+    whether the session has paid for itself yet.
+  </p>
+
+  <h2>Where the ads fit — and where they don't</h2>
+  <p>
+    Ads appear in two places: a small card between tool steps while the agent
+    works, and a sponsored break when you ask for something the current balance
+    can't fund. That second one is the design decision worth explaining.
+  </p>
+  <p>
+    When a request would overrun the collectible balance, Infyield doesn't
+    silently fail and doesn't hide behind a generic error. It refuses the turn
+    with a structured response and offers a trade: view a sponsored card now,
+    then retry the request. The ad funds the work you were about to do. If a
+    deployment is running placeholder "house" inventory instead of a real ad
+    network, the app says so plainly — house revenue is bookkeeping, not
+    collectible money, and it will not unlock a premium model, because
+    pretending otherwise would be the same old dishonest meter with extra steps.
+  </p>
+
+  <h2>Details that turned out to matter</h2>
+  <p>
+    Building this surfaced a set of small correctness problems that each would
+    have quietly corrupted the economics. A few, for the technically inclined:
+  </p>
+  <ul>
+    <li>
+      <strong>Per-serve impression tokens.</strong> Deduplicating impressions by
+      creative id means a small rotating ad pool collapses into "already seen"
+      after the first serve — one impression credited, ever. The fix was minting
+      a fresh token per serve and keeping the creative id separately for
+      reconciliation.
+    </li>
+    <li>
+      <strong>Booking after verification, not before.</strong> The dedupe key
+      must be written only after the impression's pixel is actually
+      acknowledged. Book first, and a failed pixel burns the impression
+      permanently — revenue that was never confirmed becomes revenue that can
+      never be collected.
+    </li>
+    <li>
+      <strong>Monotonic ledger ids.</strong> Deriving entry ids from array
+      length silently collides once a cap trims the array — two different
+      entries sharing one id, which makes reconciliation ambiguous. Ids are now
+      a persisted counter, not a derived value.
+    </li>
+    <li>
+      <strong>Serialized writes.</strong> Every ledger store is a
+      read-modify-write cycle; two concurrent impressions can race and drop one
+      update. A per-file async mutex fixed it in-process, which is the only
+      concurrency that exists in a local single-user app.
+    </li>
+  </ul>
+  <p>
+    None of these are glamorous. All of them are the difference between a ledger
+    you can trust and one that drifts.
+  </p>
+
+  <h2>Why a local agent at all</h2>
+  <p>
+    Because the work happens on your machine, the blast radius of trusting the
+    agent is yours to choose: it operates in one workspace directory, its shell
+    and file tools are visible in the transcript, and the data directory stays
+    under <code>~/Library/Application Support</code>. The server binds to
+    loopback only. Nothing about the product requires shipping your code
+    somewhere else just to get an answer.
+  </p>
+
+  <h2>What's next</h2>
+  <p>
+    The near-term roadmap is boring on purpose: more test coverage on the money
+    path, a settings surface for the ad network credentials, and tighter
+    reconciliation between network statements and booked impressions. If the
+    model of "ads fund the agent, the ledger keeps everyone honest" holds up in
+    practice, the interesting question becomes what else a local-first agent
+    can pay its own way for.
+  </p>
+
+  <a class="backlink" href="./index.html">← Back to Infyield</a>
+</article>
+
+</body>
+</html>

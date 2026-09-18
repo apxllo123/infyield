@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Infyield — the ad-funded local AI coding agent</title>
+  <meta name="description" content="Infyield is a free, local-first AI coding agent for macOS. Inline ads shown while the agent works fund the upstream model spend — no tokens, no credits, no API keys for users.">
+  <link rel="icon" href="./infyield-icon.jpg">
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <p class="kicker">Local-first · Apache-2.0 · macOS</p>
+    <h1>Infyield</h1>
+    <p class="tagline">
+      A <strong>free, ad-funded AI coding agent</strong> that runs on your machine.
+      You never see tokens, credits, or API keys — while the agent works,
+      small inline text ads appear, and they pay for the model spend.
+    </p>
+    <p class="cta-row">
+      <a class="btn primary" href="https://github.com/apxllo/infyield">Source on GitHub</a>
+      <a class="btn" href="./writeup.html">How the ad funding works →</a>
+    </p>
+  </div>
+</header>
+
+<!-- ============ ABOVE-FOLD AD ZONE ============
+     Reviewers from Carbon and EthicalAds check that the approved
+     placement is visible without scrolling, on real content, above
+     the fold. This slot is exactly that. When your placement id
+     arrives, replace the placeholder <div> below with the network's
+     embed snippet and delete this comment block.
+     ============================================ -->
+<section class="wrap adzone" aria-label="Advertisement">
+  <div class="ad-slot" id="carbon-ad-slot">
+    <span class="ad-note">ad — publisher slot</span>
+  </div>
+</section>
+<!-- ============ /AD ZONE ============ -->
+
+<main class="wrap">
+
+  <section class="card">
+    <h2>What it does</h2>
+    <ul>
+      <li><strong>Agent loop with tools.</strong> Reads and edits files, runs shell commands, and answers follow-ups in a normal multi-turn conversation.</li>
+      <li><strong>One shared credential.</strong> The operator configures the upstream model key once; chat users never handle credentials.</li>
+      <li><strong>Honest accounting.</strong> Every impression credits a real USD ledger; every model call debits its estimated token cost against it. The balance gates access to premium models.</li>
+      <li><strong>Native macOS app.</strong> Ships as a real Electron .app — server, UI, and hardening in one process. Data stays in <code>~/Library/Application Support/Infyield</code>.</li>
+    </ul>
+  </section>
+
+  <section class="card">
+    <h2>The economics, in one line</h2>
+    <p class="mono">ad revenue − model cost = net · when net ≥ 0, usage is fully self-funded</p>
+    <p>
+      Impressions credit <em>CPM ÷ 1000</em> and clicks credit <em>CPC</em> from the advertiser's
+      campaign, while each model call debits its estimated token cost. Premium models stay
+      locked until collectible ad revenue covers the spend — so the agent has a built-in
+      incentive to keep the ad loop honest.
+    </p>
+  </section>
+
+  <section class="card">
+    <h2>See it work</h2>
+    <p>
+      Two moments from a real session — the ad card that appears while the
+      agent works, and the answer footer that shows exactly what the turn spent.
+    </p>
+    <div class="shots">
+      <figure>
+        <img src="./img/screenshot-ad-card-and-tools.jpg"
+             alt="Infyield transcript: an inline ad card ('The AI code reviewer') shown above the agent's answer about the current environment"
+             width="1400" height="519">
+        <figcaption>Inline ad card rendered mid-conversation — impressions and clicks credit the ledger.</figcaption>
+      </figure>
+      <figure>
+        <img src="./img/screenshot-answer-footer.jpg"
+             alt="Infyield answer footer showing the model name, deepseek-v4.1-flash, and the token count for the turn"
+             width="1400" height="497" loading="lazy">
+        <figcaption>The turn's model and token spend, in the open — the same ledger the ads fund.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Why ads instead of subscriptions</h2>
+    <p>
+      Developer tools increasingly hide real usage behind opaque credit systems. Infyield's
+      alternative is legible: a public ledger on your own machine, revenue that arrives as
+      clearly-labelled ad impressions, and spend that shows up as clearly-labelled token
+      debits. When the ledger is positive, the tool is free. The write-up goes deeper:
+    </p>
+    <p><a href="./writeup.html">Read “Funding a local AI agent with an honest ad loop” →</a></p>
+  </section>
+
+  <section class="card">
+    <h2>Links</h2>
+    <ul class="links">
+      <li><a href="https://github.com/apxllo/infyield">GitHub — apxllo/infyield</a></li>
+      <li><a href="./writeup.html">Funding a local AI agent with an honest ad loop</a></li>
+    </ul>
+  </section>
+
+</main>
+
+<footer class="wrap footer">
+  <p>Infyield · open source under Apache-2.0 · runs locally on your hardware</p>
+</footer>
+
+</body>
+</html>

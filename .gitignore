@@ -1,0 +1,19 @@
+node_modules/
+.next/
+.data/
+.env*
+*.tsbuildinfo
+next-env.d.ts
+
+# Local agent state (Codebuff/Freebuff desktop)
+.freebuff/
+
+# Upstream Freebuff clone kept for reference only — not part of this app
+reference/
+
+# Release build output (scripts/build-app.sh)
+.next-release/
+release/
+
+# macOS Finder droppings
+.DS_Store
