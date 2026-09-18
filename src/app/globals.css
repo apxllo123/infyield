@@ -12,17 +12,19 @@
    ========================================================================== */
 
 :root {
-  /* Ink: the canvas the whole app floats on */
-  --ink-0: #06060a;
-  --ink-1: #0a0a0f;
-  --ink-2: #0f0f16;
+  /* Ink: the canvas the whole app floats on. Dug deeper (Wallspace-style)
+     so the atmosphere glows read as light sources, not grey haze. */
+  --ink-0: #040407;
+  --ink-1: #08080c;
+  --ink-2: #0d0d13;
 
   /* Surfaces are alpha-layered over the atmosphere so the background reads
-     through them — that is what makes the panels feel like glass. */
-  --surface-1: rgba(255, 255, 255, 0.038);
-  --surface-2: rgba(255, 255, 255, 0.062);
-  --surface-3: rgba(255, 255, 255, 0.09);
-  --surface-solid: rgba(18, 18, 24, 0.72);
+     through them — that is what makes the panels feel like glass. Lifted one
+     notch so the deeper ink doesn't flatten them. */
+  --surface-1: rgba(255, 255, 255, 0.048);
+  --surface-2: rgba(255, 255, 255, 0.075);
+  --surface-3: rgba(255, 255, 255, 0.105);
+  --surface-solid: rgba(16, 16, 22, 0.78);
 
   --border-1: rgba(255, 255, 255, 0.08);
   --border-2: rgba(255, 255, 255, 0.13);
@@ -43,6 +45,12 @@
   --cyan: #46c8e8;
   --violet: #8b7bf0;
   --amber: #f0b34a;
+
+  /* Cinematic accent pools (Wallspace-style practical light). These tint the
+     atmosphere and hero moments only — never controls, never text. */
+  --glow-mint: rgba(53, 224, 161, 0.42);
+  --glow-cyan: rgba(70, 200, 232, 0.32);
+  --glow-violet: rgba(139, 123, 240, 0.26);
 
   /* Radius system — six values, no one-offs */
   --r-xs: 10px;
@@ -244,8 +252,8 @@ body {
   position: absolute;
   inset: 0 0 auto 0;
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.34) 22%, rgba(255, 255, 255, 0.34) 78%, transparent);
-  opacity: 0.7;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.45) 22%, rgba(255, 255, 255, 0.45) 78%, transparent);
+  opacity: 0.8;
   border-radius: inherit;
   pointer-events: none;
 }
