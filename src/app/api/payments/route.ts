@@ -3,6 +3,7 @@ import type { PaymentProviderKind } from "@/lib/types";
 import { requireAdmin } from "@/lib/auth";
 import {
   createInvoicePayLink,
+  effectivePayments,
   invoiceMessage,
   publicPayments,
   reconcileProviderPayments,
@@ -17,7 +18,7 @@ const PROVIDERS: PaymentProviderKind[] = ["none", "link", "stripe"];
 export async function GET(req: NextRequest) {
   const denied = requireAdmin(req);
   if (denied) return denied;
-  return Response.json({ payments: publicPayments() });
+  return Response.json({ payments: publicPayments(await effectivePayments()) });
 }
 
 export async function PATCH(req: NextRequest) {
@@ -63,8 +64,8 @@ export async function PATCH(req: NextRequest) {
     }
   }
 
-  savePaymentSettings(b);
-  return Response.json({ payments: publicPayments() });
+  await savePaymentSettings(b);
+  return Response.json({ payments: publicPayments(await effectivePayments()) });
 }
 
 /**
@@ -79,12 +80,12 @@ export async function POST(req: NextRequest) {
 
   if (b.action === "test") {
     const res = await testPaymentProvider();
-    return Response.json({ ...res, payments: publicPayments() }, { status: res.ok ? 200 : 400 });
+    return Response.json({ ...res, payments: publicPayments(await effectivePayments()) }, { status: res.ok ? 200 : 400 });
   }
 
   if (b.action === "sync") {
     const res = await reconcileProviderPayments();
-    return Response.json({ ...res, payments: publicPayments() }, { status: res.ok ? 200 : 400 });
+    return Response.json({ ...res, payments: publicPayments(await effectivePayments()) }, { status: res.ok ? 200 : 400 });
   }
 
   if (b.action === "pay-link") {

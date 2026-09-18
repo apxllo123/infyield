@@ -1137,6 +1137,11 @@ async function main() {
       `provider=${configured.body.payments?.provider} keyMode=${configured.body.payments?.keyMode}`,
     );
     check(
+      "scratch servers keep the key in the file store, never the user's Keychain",
+      configured.body.payments?.storage === "file",
+      `storage=${configured.body.payments?.storage} (INFYIELD_IN_VERIFICATION gates the Keychain off)`,
+    );
+    check(
       "the stored secret never leaves the server on the payments endpoint",
       !JSON.stringify(configured.body).includes("mockkey_notarealkey"),
       "PATCH /api/payments response carries no key material",

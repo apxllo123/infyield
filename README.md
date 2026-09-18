@@ -670,10 +670,17 @@ refills its own funding when it needs money, and relaxes when flush.
 ## Data & state
 
 Everything persists as JSON in `.data/` (gitignored), written owner-only
-(`0600`, because `settings.json` holds the Stripe secret key and the access
+(`0600`, because `settings.json` holds the access
 passwords): `economy.json`, `campaigns.json`, `settings.json`, `usage.json`, the
 impression map and event idempotency, and — outside it, in the data directory —
-`provider.env` with the deployment's credential. `economy.json` also carries a
+`provider.env` with the deployment's credential. The Stripe secret key is the
+one credential that does not live in that file: on a real install it is stored
+in the **macOS Keychain** ("Infyield Stripe secret key") and resolved from there
+at call time — `settings.json` keeps only an empty field plus `hasStripeKey`.
+Removing the file, or copying the data directory elsewhere, no longer captures
+the credential. Verification-harness servers (marked with
+`INFYIELD_IN_VERIFICATION`) keep using the plaintext field so suites never
+touch the user's real Keychain. `economy.json` also carries a
 monotonic `nextEntryId`, which is where ledger entry ids come from now; a file
 written before that field existed is read as-is, falling back to one more than
 the highest id it holds, so nothing needs migrating. Concurrent writers to one

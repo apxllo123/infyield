@@ -6,6 +6,7 @@ import type {
 } from "./types";
 import { getSettings, saveSettings } from "./settings";
 import { invoiceSettlement, listCampaigns, recordInvoicePayment, setInvoicePayLink } from "./ads";
+import { keychainDelete, keychainInUse, keychainSet, resolveStripeKey } from "./keychain";
 
 /**
  * Getting paid, rather than recording that you were.
@@ -50,6 +51,9 @@ export function paymentsSettings(): PaymentsSettings {
   return {
     provider: p?.provider ?? "none",
     linkUrl: p?.linkUrl ?? "",
+    /** The on-disk field. On a real install this is normally empty: the key
+     *  lives in the Keychain (see keychain.ts) and effectivePayments() is what
+     *  hands the real credential to the Stripe client. */
     stripeSecretKey: p?.stripeSecretKey ?? "",
     successUrl: p?.successUrl ?? "",
     cancelUrl: p?.cancelUrl ?? "",
@@ -59,8 +63,19 @@ export function paymentsSettings(): PaymentsSettings {
   };
 }
 
+/**
+ * The payments settings as the Stripe client should see them: with the secret
+ * key resolved from wherever it actually lives (Keychain first, then the legacy
+ * plaintext field, which is also what verification-harness servers use).
+ */
+export async function effectivePayments(): Promise<PaymentsSettings> {
+  const base = paymentsSettings();
+  const resolved = await resolveStripeKey();
+  return { ...base, stripeSecretKey: resolved.key };
+}
+
 /** Server-side only view. The route strips the secret before it leaves. */
-export function publicPayments(p: PaymentsSettings = paymentsSettings()) {
+export function publicPayments(p: PaymentsSettings) {
   return {
     provider: p.provider,
     linkUrl: p.linkUrl,
@@ -69,9 +84,16 @@ export function publicPayments(p: PaymentsSettings = paymentsSettings()) {
     /** Never the key itself — only whether one is stored. */
     hasStripeKey: p.stripeSecretKey.trim().length > 0,
     keyMode: stripeKeyMode(p.stripeSecretKey),
+    /** Where the key lives, so the UI can say so truthfully. */
+    storage: keychainInUse() ? ("keychain" as const) : ("file" as const),
     lastSyncAt: p.lastSyncAt ?? null,
     lastSyncText: p.lastSyncText ?? null,
   };
+}
+
+/** `publicPayments` for the current install, key included from its real home. */
+export async function publicPaymentsAsync() {
+  return publicPayments(await effectivePayments());
 }
 
 /**
@@ -96,14 +118,43 @@ export function stripeKeyMode(key: string): "none" | "restricted" | "secret" | "
  * A field that is absent is left alone, so the UI can send `provider` without
  * re-sending the secret, and a key is only ever replaced when one is actually
  * provided — never blanked out by a form that did not have it loaded.
+ *
+ * The secret key is the one field that does not land in settings.json on a real
+ * install: it goes to the macOS Keychain, and the on-disk field is kept empty.
+ * An explicit empty string means "remove the key" and clears both stores.
  */
-export function savePaymentSettings(patch: Record<string, unknown>): PaymentsSettings {
+export async function savePaymentSettings(patch: Record<string, unknown>): Promise<PaymentsSettings> {
   const current = paymentsSettings();
   const str = (v: unknown, fallback: string) => (v === undefined ? fallback : String(v).trim());
+
+  // ---- the key: route it to its store before anything else touches the file
+  let keyOnDisk = current.stripeSecretKey;
+  if (patch.stripeSecretKey !== undefined) {
+    const incoming = String(patch.stripeSecretKey).trim();
+    if (!incoming) {
+      // An explicit blank is a removal: clear the Keychain entry and the field.
+      await keychainDelete();
+      keyOnDisk = "";
+    } else if (keychainInUse()) {
+      const ok = await keychainSet(incoming);
+      if (ok) {
+        keyOnDisk = ""; // the file must not carry what the Keychain now holds
+      } else {
+        // Keychain refused (headless/locked): fall back to the plaintext field
+        // rather than losing the operator's key. publicPayments reports the
+        // truthful `storage`, and the settings UI surfaces it.
+        keyOnDisk = incoming;
+      }
+    } else {
+      // Verification-harness server (or non-mac): plaintext field as before.
+      keyOnDisk = incoming;
+    }
+  }
+
   const next: PaymentsSettings = {
     provider: (patch.provider as PaymentProviderKind | undefined) ?? current.provider,
     linkUrl: str(patch.linkUrl, current.linkUrl),
-    stripeSecretKey: str(patch.stripeSecretKey, current.stripeSecretKey),
+    stripeSecretKey: keyOnDisk,
     successUrl: str(patch.successUrl, current.successUrl),
     cancelUrl: str(patch.cancelUrl, current.cancelUrl),
     // Not settable from a request: a live install must not be aimable at a mock.
@@ -120,9 +171,10 @@ export function stripeBase(p: PaymentsSettings = paymentsSettings()): string {
   return (p.stripeBaseUrl || STRIPE_BASE).replace(/\/+$/, "");
 }
 
-export function collectionReady(p: PaymentsSettings = paymentsSettings()): boolean {
-  if (p.provider === "link") return p.linkUrl.trim().length > 0;
-  if (p.provider === "stripe") return p.stripeSecretKey.trim().length > 0;
+export async function collectionReady(p?: PaymentsSettings): Promise<boolean> {
+  const pay = p ?? (await effectivePayments());
+  if (pay.provider === "link") return pay.linkUrl.trim().length > 0;
+  if (pay.provider === "stripe") return pay.stripeSecretKey.trim().length > 0;
   return false;
 }
 
@@ -165,14 +217,15 @@ function stripeErrorMessage(status: number, body: string): string {
 async function stripeRequest<T>(
   path: string,
   init: { method: "GET" | "POST"; body?: Record<string, string | number | boolean | undefined> },
-  p: PaymentsSettings = paymentsSettings(),
+  p?: PaymentsSettings,
 ): Promise<StripeResult<T>> {
-  const key = p.stripeSecretKey.trim();
+  const settings = p ?? (await effectivePayments());
+  const key = settings.stripeSecretKey.trim();
   if (!key) return { ok: false, error: "No Stripe key is configured.", status: 0 };
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), STRIPE_TIMEOUT_MS);
   try {
-    const res = await fetch(`${stripeBase(p)}${path}`, {
+    const res = await fetch(`${stripeBase(settings)}${path}`, {
       method: init.method,
       headers: {
         authorization: `Bearer ${key}`,
@@ -252,8 +305,9 @@ function campaignsWithInvoice() {
  */
 export async function createInvoicePayLink(
   campaignId: string,
-  p: PaymentsSettings = paymentsSettings(),
+  p?: PaymentsSettings,
 ): Promise<PayLinkResult> {
+  const pay = p ?? (await effectivePayments());
   const campaign = listCampaigns().find((c) => c.id === campaignId);
   const account = campaign?.advertiserAccount;
   if (!campaign || !account) return { ok: false, error: "Campaign has no advertiser on record." };
@@ -262,15 +316,15 @@ export async function createInvoicePayLink(
   if (settlement.balanceUsd <= 1e-9) {
     return { ok: false, error: `${account.invoiceId} is already settled — there is nothing to collect.` };
   }
-  if (p.provider === "none") {
+  if (pay.provider === "none") {
     return {
       ok: false,
       error: "No payment provider is configured. Choose one in Settings → Payments before raising a link.",
     };
   }
 
-  if (p.provider === "link") {
-    const url = p.linkUrl.trim();
+  if (pay.provider === "link") {
+    const url = pay.linkUrl.trim();
     if (!url) return { ok: false, error: "No payment link URL is set in Settings → Payments." };
     let parsed: URL;
     try {
@@ -292,7 +346,7 @@ export async function createInvoicePayLink(
   }
 
   // Stripe: a Checkout Session for exactly what is outstanding.
-  if (!p.successUrl.trim()) {
+  if (!pay.successUrl.trim()) {
     return {
       ok: false,
       error:
@@ -303,8 +357,8 @@ export async function createInvoicePayLink(
   const body: Record<string, string | number | boolean | undefined> = {
     mode: "payment",
     // Hosted by Stripe, so no card data ever reaches this app.
-    success_url: p.successUrl.trim(),
-    ...(p.cancelUrl.trim() ? { cancel_url: p.cancelUrl.trim() } : {}),
+    success_url: pay.successUrl.trim(),
+    ...(pay.cancelUrl.trim() ? { cancel_url: pay.cancelUrl.trim() } : {}),
     client_reference_id: account.invoiceId,
     [`metadata[${INVOICE_METADATA_KEY}]`]: account.invoiceId,
     [`metadata[infyield_campaign]`]: campaignId,
@@ -313,7 +367,7 @@ export async function createInvoicePayLink(
     "line_items[0][price_data][unit_amount]": cents,
     "line_items[0][price_data][product_data][name]": `${account.invoiceId} — ${account.name}`,
   };
-  const res = await stripeRequest<StripeSession>("/v1/checkout/sessions", { method: "POST", body }, p);
+  const res = await stripeRequest<StripeSession>("/v1/checkout/sessions", { method: "POST", body }, pay);
   if (!res.ok) return { ok: false, error: res.error };
   const url = res.data.url;
   if (!url) return { ok: false, error: "Stripe created a session but returned no payment URL." };
@@ -392,11 +446,12 @@ function findByInvoiceId(invoiceId: string) {
  * `paid` a consequence of money rather than an opinion.
  */
 export async function reconcileProviderPayments(
-  p: PaymentsSettings = paymentsSettings(),
+  p?: PaymentsSettings,
 ): Promise<ReconcileResult> {
+  const pay = p ?? (await effectivePayments());
   const base: ReconcileResult = {
     ok: true,
-    provider: p.provider,
+    provider: pay.provider,
     checked: 0,
     recorded: [],
     skipped: [],
@@ -404,24 +459,24 @@ export async function reconcileProviderPayments(
     message: "",
   };
 
-  if (p.provider === "none") {
+  if (pay.provider === "none") {
     return { ...base, ok: false, error: "No payment provider is configured." };
   }
-  if (p.provider === "link") {
+  if (pay.provider === "link") {
     return {
       ...base,
       message:
         "A static payment link cannot be checked automatically — whoever pays goes to your provider, and the app has no way to see that. Record the payment when it lands, or switch to Stripe to have it read back for you.",
     };
   }
-  if (!p.stripeSecretKey.trim()) {
+  if (!pay.stripeSecretKey.trim()) {
     return { ...base, ok: false, error: "No Stripe key is configured." };
   }
 
   const res = await stripeRequest<{ data?: StripeSession[] }>(
     `/v1/checkout/sessions?limit=${SYNC_WINDOW}&status=complete`,
     { method: "GET" },
-    p,
+    pay,
   );
   if (!res.ok) {
     const result: ReconcileResult = { ...base, ok: false, error: res.error };
@@ -551,14 +606,15 @@ function money(v: number): string {
  * money or leave an artefact behind.
  */
 export async function testPaymentProvider(
-  p: PaymentsSettings = paymentsSettings(),
+  p?: PaymentsSettings,
 ): Promise<{ ok: boolean; message: string; detail?: string }> {
-  if (p.provider === "none") return { ok: false, message: "No payment provider is configured." };
+  const pay = p ?? (await effectivePayments());
+  if (pay.provider === "none") return { ok: false, message: "No payment provider is configured." };
 
-  if (p.provider === "link") {
-    if (!p.linkUrl.trim()) return { ok: false, message: "No payment link is set." };
+  if (pay.provider === "link") {
+    if (!pay.linkUrl.trim()) return { ok: false, message: "No payment link is set." };
     try {
-      const u = new URL(p.linkUrl.trim());
+      const u = new URL(pay.linkUrl.trim());
       if (u.protocol !== "https:") return { ok: false, message: "The payment link must be https." };
       return { ok: true, message: `Link looks usable (${u.host}). The app cannot verify it beyond that — it does not hold the account.` };
     } catch {
@@ -566,7 +622,7 @@ export async function testPaymentProvider(
     }
   }
 
-  const res = await stripeRequest<StripeAccount>("/v1/balance", { method: "GET" }, p);
+  const res = await stripeRequest<StripeAccount>("/v1/balance", { method: "GET" }, pay);
   if (!res.ok) {
     return {
       ok: false,
