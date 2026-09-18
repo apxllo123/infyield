@@ -1,31 +1,22 @@
 # Publishing this site + applying to Carbon / EthicalAds
 
-The site is three files (`index.html`, `writeup.html`, `style.css`), the icon,
-and two UI screenshots in `img/`. No build step — GitHub Pages serves it as-is.
+The site files live **at the repo root** (`index.html`, `writeup.html`,
+`style.css`, the payment pages, `img/`) so GitHub Pages serves them at
+`https://apxllo123.github.io/infyield/` directly. `.nojekyll` disables
+Jekyll processing. No build step — Pages serves it as-is.
 
-## 1. Publish to GitHub Pages (10 minutes)
+## 1. Publishing (done)
+
+The repo is live at https://github.com/apxllo123/infyield and Pages is
+deploying from **main / (root)**. After changing site files:
 
 ```bash
-# from the repo root
-git checkout -b site            # or commit straight to main, your call
-git add site/
-git commit -m "Add GitHub Pages site for publisher applications"
-
-# Option A — easiest: serve /site from main
-git push origin site
-# then on GitHub: repo → Settings → Pages →
-#   Source: "Deploy from a branch", Branch: site, Folder: / (root)
-#   → Save. Site goes live at https://apxllo123.github.io/infyield/ in ~1 min.
-
-# Option B — serve /site from main with a path prefix
-# (only if you'd rather keep everything on one branch):
-#   move the three files + icon into /docs and select branch main, folder /docs
+# commit (or use GitHub Desktop), then push
+# Pages rebuilds automatically in ~1 minute
 ```
 
-If you own a custom domain you can point it at Pages later
-(Settings → Pages → Custom domain); the networks don't require it, but a
-domain looks marginally more credible than `github.io` — either is fine to
-apply with.
+If Pages ever needs re-enabling: repo → Settings → Pages →
+Deploy from a branch → main → / (root).
 
 ### Before you hit publish — three personalization touches
 
