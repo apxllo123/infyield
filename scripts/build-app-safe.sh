@@ -45,8 +45,9 @@ mkdir -p "$STAGE"
     next-env.d.ts LICENSE NOTICE README.md ) | tar xf - -C "$STAGE"
 
 # The icon is not part of the source tree but build-app.sh patches it into the bundle.
-for icon in infyield-icon.icns infyield-icon.jpg infyield-icon.svg; do
-  [ -f "$ROOT/$icon" ] && cp "$ROOT/$icon" "$STAGE/" || true
+mkdir -p "$STAGE/assets"
+for icon in infyield-icon.icns infyield-icon.png apple-touch-icon.png assets/infyield-icon.png; do
+  [ -f "$ROOT/$icon" ] && cp "$ROOT/$icon" "$STAGE/$icon" || true
 done
 
 if [ ! -d "$STAGE/node_modules" ]; then

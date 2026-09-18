@@ -1,41 +1,27 @@
 #!/bin/bash
-# Build infyield-icon.icns from infyield-icon.svg.
+# Build infyield-icon.icns + the web/app icons from assets/infyield-icon.png.
 #
-# Edit the SVG, never the .icns — the SVG is the source of truth and this script
-# regenerates every size macOS asks for.
+# The PNG master is the source of truth (1024×1024, artwork cropped tight to
+# the squircle, corners masked transparent at the macOS 22.37% radius — see
+# scripts/build-icon-from-png.cjs, the one-shot migration that produced it from
+# the designer's file). Edit the master, never the .icns.
 #
 #   ./scripts/build-icon.sh
-#
-# Rasterising needs a browser engine; Electron ships one, so no extra tooling
-# (rsvg, imagemagick) is required. Rendering is done offscreen because a normal
-# window is clamped to the physical display (that is what produced a lop-sided
-# 2048x1804 icon once) — offscreen is not, so we get a supersampled square
-# source and can downscale cleanly to every size.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 ROOT="$PWD"
 
-SVG="$ROOT/infyield-icon.svg"
+PNG="$ROOT/assets/infyield-icon.png"
 OUT="$ROOT/infyield-icon.icns"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
-[ -f "$SVG" ] || { echo "✗ missing $SVG"; exit 1; }
-[ -x "$ROOT/node_modules/.bin/electron" ] || { echo "✗ run npm install first (electron is required to rasterise)"; exit 1; }
+[ -f "$PNG" ] || { echo "✗ missing $PNG"; exit 1; }
 
-echo "▶ Rendering $(basename "$SVG")..."
-"$ROOT/node_modules/.bin/electron" "$ROOT/.freebuff/render-svg.cjs" "$SVG" 1024 "$WORK/source.png" 2>/dev/null \
-  | grep -E "^rendered" || true
-
-[ -s "$WORK/source.png" ] || { echo "✗ rasteriser produced no output"; exit 1; }
-
-SRC_W=$(sips -g pixelWidth "$WORK/source.png" | awk '/pixelWidth/{print $2}')
-SRC_H=$(sips -g pixelHeight "$WORK/source.png" | awk '/pixelHeight/{print $2}')
-if [ "$SRC_W" != "$SRC_H" ] || [ "$SRC_W" -lt 512 ]; then
-  echo "✗ expected a square source of at least 512px, got ${SRC_W}x${SRC_H}"
-  exit 1
-fi
-echo "  source: ${SRC_W}x${SRC_H}"
+W=$(sips -g pixelWidth "$PNG" | awk '/pixelWidth/{print $2}')
+H=$(sips -g pixelHeight "$PNG" | awk '/pixelHeight/{print $2}')
+[ "$W" = "$H" ] || { echo "✗ master must be square, got ${W}x${H}"; exit 1; }
+[ "$W" -ge 1024 ] || { echo "✗ master must be ≥1024px, got $W"; exit 1; }
 
 # The directory name MUST end in `.iconset` — iconutil rejects it otherwise with
 # a bare "Invalid Iconset" even when every PNG inside is correct.
@@ -47,29 +33,24 @@ for spec in "16:icon_16x16" "32:icon_16x16@2x" "32:icon_32x32" "64:icon_32x32@2x
   px="${spec%%:*}"
   name="${spec##*:}"
   # -Z scales proportionally and preserves alpha; never resample up.
-  if [ "$px" -le "$SRC_W" ]; then
-    sips -s format png -Z "$px" "$WORK/source.png" --out "$WORK/icon.iconset/$name.png" >/dev/null 2>&1
+  if [ "$px" -le "$W" ]; then
+    sips -s format png -Z "$px" "$PNG" --out "$WORK/icon.iconset/$name.png" >/dev/null 2>&1
   else
-    sips -s format png "$WORK/source.png" --out "$WORK/icon.iconset/$name.png" >/dev/null 2>&1
+    sips -s format png "$PNG" --out "$WORK/icon.iconset/$name.png" >/dev/null 2>&1
   fi
 done
 
 # ---------------------------------------------------------------- web icons --
-# The tab favicon and the pinned/apple icon come from the SAME source as the
+# The tab favicon and the pinned/apple icon come from the SAME master as the
 # .app icon, so they can never drift apart. Next's file conventions pick up
-# src/app/icon.svg and src/app/apple-icon.png automatically.
-#
-# The favicon crops to the plate (viewBox 100 100 824 824): a favicon has no
-# margin to spare, so the 100pt macOS padding would leave the mark tiny in a tab.
-echo "▶ Emitting web icons..."
-sed -e 's|width="1024" height="1024" viewBox="0 0 1024 1024"|width="64" height="64" viewBox="100 100 824 824"|' \
-  "$SVG" > "$ROOT/src/app/icon.svg"
-grep -q 'viewBox="100 100 824 824"' "$ROOT/src/app/icon.svg" || {
-  echo "✗ couldn't rewrite the viewBox for src/app/icon.svg (did the <svg> tag change?)"
-  exit 1
-}
-sips -s format png -Z 180 "$WORK/source.png" --out "$ROOT/src/app/apple-icon.png" >/dev/null 2>&1
-echo "  src/app/icon.svg + apple-icon.png"
+# src/app/icon.png and src/app/apple-icon.png automatically.
+node -e '
+const sharp = require("sharp");
+sharp("assets/infyield-icon.png").resize(64, 64).png().toFile("src/app/icon.png").catch((e) => { console.error(e); process.exit(1); });
+'
+sips -s format png -Z 180 "$PNG" --out "$ROOT/src/app/apple-icon.png" >/dev/null 2>&1
+sips -s format png -Z 180 "$PNG" --out "$ROOT/apple-touch-icon.png" >/dev/null 2>&1
+echo "▶ Emitted web icons: src/app/icon.png, apple-icon.png, apple-touch-icon.png"
 
 echo "▶ Packing iconset..."
 iconutil -c icns "$WORK/icon.iconset" -o "$OUT"

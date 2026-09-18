@@ -65,7 +65,7 @@ open "release/Infyield-darwin-arm64/Infyield.app"
   runs outside the bundle except Electron's own GPU/renderer helpers.
 - The app picks the first free port from 3777 upward, so it never dies from a
   busy port, and ad/authorize links open in the real browser.
-- Custom icon (`infyield-icon.jpg` → full-bleed `infyield-icon.icns`),
+- Custom icon (`assets/infyield-icon.png` → full-bleed `infyield-icon.icns`),
   single-instance lock.
 - Runtime data lives in `~/Library/Application Support/Infyield/data`
   (`INFYIELD_DATA_DIR`), so the bundle stays read-only; data from the
@@ -555,11 +555,14 @@ ledger, campaigns + invoicing, payouts), **Settings**.
 - **Atmosphere**: each page floats on layered CSS only — drifting colour fields,
   a radially-masked grid, grain, scrim and vignette (`Atmosphere.tsx`). No image
   assets ship; the hero artifact (`HeroVisual.tsx`) is CSS + one inline SVG.
-- **App icon**: `infyield-icon.svg` is the source of truth and
-  `./scripts/build-icon.sh` rasterises it to `infyield-icon.icns` at all ten
-  macOS sizes (on the Apple icon grid, so it sits correctly next to system
-  icons). The glyph is the product's own four-point sparkle, so the Dock, the
-  nav brand and the in-app icons share one identity. The app also reserves the
+- **App icon**: `assets/infyield-icon.png` is the source of truth (1024×1024,
+  cropped tight to the squircle with the macOS 22.37% corner radius as alpha)
+  and `./scripts/build-icon.sh` derives `infyield-icon.icns` at all ten macOS
+  sizes plus the favicons (`src/app/icon.png`, `apple-icon.png`,
+  `apple-touch-icon.png`, site `infyield-icon.png`) — one master, so the Dock,
+  the browser tab and the site can never drift apart. The glyph is the glass
+  six-arm asterisk, echoed by the in-app brand mark (`Mark` in ui.tsx), so the
+  Dock, the nav brand and the in-app icons share one identity. The app also reserves the
   native macOS title-bar band, so the traffic lights never overlap the nav.
 - **Motion**: transitions and reveals respect `prefers-reduced-motion`, and
   Settings → Appearance has a **Calm** switch that keeps the layout identical
