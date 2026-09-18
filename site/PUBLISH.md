@@ -15,7 +15,7 @@ git commit -m "Add GitHub Pages site for publisher applications"
 git push origin site
 # then on GitHub: repo → Settings → Pages →
 #   Source: "Deploy from a branch", Branch: site, Folder: / (root)
-#   → Save. Site goes live at https://apxllo.github.io/infyield/ in ~1 min.
+#   → Save. Site goes live at https://apxllo123.github.io/infyield/ in ~1 min.
 
 # Option B — serve /site from main with a path prefix
 # (only if you'd rather keep everything on one branch):
@@ -29,7 +29,7 @@ apply with.
 
 ### Before you hit publish — three personalization touches
 
-1. **GitHub link.** `index.html` links to `https://github.com/apxllo/infyield`
+1. **GitHub link.** `index.html` links to `https://github.com/apxllo123/infyield`
    in two places (hero button + Links card). If the repo is private or named
    differently, fix both. If the repo is private, either make it public (best
    for the application — reviewers may click through) or change the button to
@@ -45,7 +45,7 @@ Go to **carbonads.net/join**. The form asks:
 
 | Field | What to put |
 |---|---|
-| Website URL | `https://apxllo.github.io/infyield/` (or your custom domain) |
+| Website URL | `https://apxllo123.github.io/infyield/` (or your custom domain) |
 | Monthly traffic | Be honest — the "Less than 10,000" bracket exists. A brand-new site is fine; they approve on content quality and placement, not raw numbers. |
 | Category / description | "Developer tools — open-source, ad-funded local AI coding agent for macOS. Site explains the product and the economics; the ad placement is above the fold on the home page." |
 | Payment details | Standard W-9 / tax flow on approval. |
@@ -105,7 +105,7 @@ What to know before applying:
 `payment-thanks.html` and `payment-cancelled.html` are the destinations Stripe
 checkout sends advertisers to after they pay (or back out of) an invoice. Once
 the site is live, their URLs — e.g.
-`https://apxllo.github.io/infyield/payment-thanks.html` — go into
+`https://apxllo123.github.io/infyield/payment-thanks.html` — go into
 **Settings → Payments → success URL / cancel URL** in the app, alongside the
 Stripe restricted key (`rk_live_…`, created in Stripe → API keys → Restricted
 keys with Checkout Session write + read scopes). The app then creates a
