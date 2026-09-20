@@ -9,6 +9,7 @@ import { modelAccess } from "@/lib/premium";
 import { PROVIDER_NOT_CONFIGURED, providerConfigured, providerStatus } from "@/lib/credentials";
 import { admitRequest, estimateTurnCostUsd, fundingSnapshot } from "@/lib/funding";
 import { toPlan } from "@/lib/router";
+import { logEvent, logError } from "@/lib/log";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -96,6 +97,18 @@ export async function POST(req: NextRequest) {
   });
   if (!decision.allowed) {
     const status = decision.disposition === "defer" ? 429 : decision.code === "premium-locked" ? 402 : 503;
+    // A refused turn used to exist only in the HTTP body. The operator can now see
+    // *why* chat is failing — cap reached, ledger empty, model not permitted — and
+    // tell an outage of the provider apart from Infyield's own admission control.
+    logEvent("warn", "chat.request.refused", {
+      code: decision.code,
+      disposition: decision.disposition,
+      status,
+      modelId: requestedId,
+      sessionId: body.sessionId ?? null,
+      estimatedCostUsd: decision.estimatedCostUsd,
+      retryAfterSec: decision.retryAfterSec ?? null,
+    });
     return Response.json(
       {
         error: decision.message,
@@ -134,6 +147,14 @@ export async function POST(req: NextRequest) {
           send(ev);
         }
       } catch (e) {
+        // The client got the message; nothing server-side did. A turn that dies
+        // mid-stream (provider dropped the connection, a tool threw) now leaves a
+        // line naming the model and session, so a "my reply stopped halfway" report
+        // can be matched to the turn instead of guessed at.
+        logError("chat.stream.failed", e, {
+          modelId: body.model || DEFAULT_MODEL_ID,
+          sessionId: body.sessionId ?? null,
+        });
         send({ type: "error", message: e instanceof Error ? e.message : String(e) });
       } finally {
         controller.enqueue(encoder.encode("data: [DONE]\n\n"));

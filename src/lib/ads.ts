@@ -13,6 +13,7 @@ import type {
 import { readJson, withFileLock, writeJson } from "./store";
 import { allEntries, creditAdRevenue, creditEstimatedRevenue, getState } from "./economy";
 import { getSettings } from "./settings";
+import { logEvent } from "./log";
 import {
   ackNetworkImpression,
   ackNetworkViewTime,
@@ -1107,7 +1108,13 @@ async function bookImpression(input: AdEventInput): Promise<ImpressionResult> {
 
   if (impressionId.startsWith(NET_PREFIX)) {
     const tracker = networkAdFor(impressionId);
-    if (!tracker) return { ok: false };
+    if (!tracker) {
+      // An ack for a network token this server never minted (a stale tab after a
+      // restart drops the in-memory tracker). Silent before this: the caller saw a
+      // 404 and the operator saw nothing, so a wave of these looked like traffic.
+      logEvent("warn", "ads.impression.unknown_network_token", { impressionId, sessionId: input.sessionId ?? null });
+      return { ok: false };
+    }
     const provider = tracker.verifiedOnServe ? "carbon" : "ethicalads";
     recordAdEvent({ type: "displayed", eventId: `displayed:${clientEventId}`, provider, ...common });
     const cpm = getSettings().ads.cpmUsd;
@@ -1118,6 +1125,16 @@ async function bookImpression(input: AdEventInput): Promise<ImpressionResult> {
     // its result decides whether any money is booked at all.
     const accepted = tracker.verifiedOnServe ? true : await ackNetworkImpression(tracker.viewUrl);
     if (!accepted) {
+      // The money path. The network refused its own view pixel, so nothing is
+      // booked; the caller got only a `warning` field in one HTTP body. Logging it
+      // with the network's own event id is what lets a "network revenue stopped
+      // accruing" report be traced to refused pixels instead of replayed by hand.
+      logEvent("warn", "ads.impression.pixel_rejected", {
+        impressionId,
+        provider,
+        networkEventId: tracker.networkEventId ?? null,
+        sessionId: input.sessionId ?? null,
+      });
       return {
         ok: true,
         creditedUsd: 0,
@@ -1170,7 +1187,14 @@ async function bookImpression(input: AdEventInput): Promise<ImpressionResult> {
 
   const cs = load();
   const c = cs.find((x) => x.id === campaignIdFor(impressionId));
-  if (!c) return { ok: false };
+  if (!c) {
+    // A first-party token whose campaign is gone (deleted between serve and ack).
+    logEvent("warn", "ads.impression.unknown_campaign_token", {
+      impressionId,
+      sessionId: input.sessionId ?? null,
+    });
+    return { ok: false };
+  }
   recordAdEvent({
     type: "displayed",
     eventId: `displayed:${clientEventId}`,
