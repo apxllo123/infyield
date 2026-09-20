@@ -98,7 +98,7 @@ export default function ChatPage() {
     }
   };
 
-  const messages = chat.active?.messages ?? [];
+  const messages = useMemo(() => chat.active?.messages ?? [], [chat.active?.messages]);
   const hasKey = !!bootstrap.data?.hasAnyKey;
   const activeModel = models.data?.models.find((m) => m.id === (modelId || chat.active?.modelId));
   const usedTokens = useMemo(() => contextTokens(messages), [messages]);
