@@ -1,6 +1,7 @@
 import http2 from "node:http2";
 import type { SponsoredAd } from "./types";
 import { readJson, writeJson } from "./store";
+import { logEvent } from "./log";
 
 /**
  * Real ad-network inventory (EthicalAds, the successor to Carbon Ads).
@@ -406,8 +407,30 @@ export async function ackNetworkImpression(viewUrl: string): Promise<boolean> {
 export function ackNetworkViewTime(viewTimeUrl: string): void {
   if (!viewTimeUrl) return;
   setTimeout(() => {
-    void httpGet(viewTimeUrl, PIXEL_TIMEOUT_MS);
+    // The result used to be dropped entirely. This pixel is the network's own
+    // viewability confirmation, so its failure is the difference between a view it
+    // pays for and one it does not — and a silent one is exactly what makes a
+    // "network paid for fewer views than we served" report impossible to chase.
+    void httpGet(viewTimeUrl, PIXEL_TIMEOUT_MS)
+      .catch(() => null)
+      .then((res) => {
+        if (!res || res.status >= 400) {
+          logEvent("warn", "ads.network.view_time_pixel_failed", {
+            status: res?.status ?? null,
+            host: pixelHost(viewTimeUrl),
+          });
+        }
+      });
   }, VIEW_TIME_DELAY_MS);
+}
+
+/** The pixel URL's host only — its path carries a per-serve nonce. */
+function pixelHost(url: string): string {
+  try {
+    return new URL(url).host;
+  } catch {
+    return "invalid-url";
+  }
 }
 
 /* --------------------------- visible network state -------------------------- */

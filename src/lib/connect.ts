@@ -1,6 +1,7 @@
 import { provisionCredential } from "./credentials";
 import { readJson, writeJson } from "./store";
 import { secureEquals } from "./auth";
+import { logEvent, logError } from "./log";
 
 // One-click OpenRouter onboarding (OAuth 2.0 + PKCE), the documented flow:
 //   1. send the browser to https://openrouter.ai/auth?callback_url=…&code_challenge=…&code_challenge_method=S256
@@ -181,10 +182,12 @@ async function exchange(code: string, verifier: string): Promise<ConnectResult> 
     });
     const body = (await res.json().catch(() => ({}))) as { key?: string; error?: unknown };
     if (!res.ok || !body.key) {
+      logEvent("warn", "connect.openrouter.exchange_rejected", { status: res.status });
       return { ok: false, error: errorText(body.error) || `OpenRouter rejected the code (HTTP ${res.status}).` };
     }
     key = body.key;
   } catch (err) {
+    logError("connect.openrouter.unreachable", err);
     return { ok: false, error: `Could not reach OpenRouter: ${(err as Error).message}` };
   }
 
@@ -198,6 +201,7 @@ async function exchange(code: string, verifier: string): Promise<ConnectResult> 
   // same place an operator-set `OPENROUTER_API_KEY` comes from.
   const provisioned = provisionCredential("openrouter", key);
   if (!provisioned.ok) {
+    logEvent("error", "connect.openrouter.provision_failed", { reason: provisioned.error ?? null });
     return { ok: false, error: provisioned.error ?? "The credential could not be stored." };
   }
   return { ok: true, label };
@@ -220,6 +224,7 @@ export async function completeOpenRouterRedirect(input: {
 }): Promise<ConnectResult> {
   const pending = loadPending();
   if (!pending) {
+    logEvent("warn", "connect.openrouter.no_pending", { flow: "redirect" });
     return { ok: false, error: "No pending connect request (or it expired). Click Connect again." };
   }
 
@@ -227,6 +232,9 @@ export async function completeOpenRouterRedirect(input: {
   clearPending();
 
   if (!secureEquals(input.state, pending.state)) {
+    logEvent("warn", "connect.openrouter.state_mismatch", {
+      bindingMatched: secureEquals(input.binding, pending.binding),
+    });
     return {
       ok: false,
       error: secureEquals(input.binding, pending.binding)
@@ -235,6 +243,7 @@ export async function completeOpenRouterRedirect(input: {
     };
   }
   if (!secureEquals(input.binding, pending.binding)) {
+    logEvent("warn", "connect.openrouter.binding_mismatch", {});
     return {
       ok: false,
       error:
@@ -257,6 +266,7 @@ export async function completeOpenRouterRedirect(input: {
 export async function completeOpenRouterConnect(code: string): Promise<ConnectResult> {
   const pending = loadPending();
   if (!pending) {
+    logEvent("warn", "connect.openrouter.no_pending", { flow: "pasted-code" });
     return { ok: false, error: "No pending connect request (or it expired). Click Connect again." };
   }
   clearPending(); // an authorization code is single-use, so this attempt spends the flow

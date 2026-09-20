@@ -28,6 +28,7 @@ import { serveAd } from "./ads";
 import { resolveChain, needsSetupError, adPressure, safeUpstreamError, providerLabel } from "./routing";
 import { runAutoSetup } from "./autosetup";
 import { beginRequest, finishRequest } from "./usage";
+import { logEvent } from "./log";
 import { toPlan, providerParams } from "./router";
 
 const SYSTEM_PROMPT = `You are Infyield, a free AI coding agent working directly in the user's project. You are practical, persistent, and action-oriented — closer to a colleague at the keyboard than a documentation page.
@@ -355,6 +356,22 @@ export async function* runAgentTurn(opts: {
         break;
       } catch (e) {
         const message = safeUpstreamError(e instanceof Error ? e.message : String(e));
+        // Whether this attempt is retried, decided below from the same condition.
+        const willRetry = !streamedAnything && attempt === 0;
+        // The failure itself, live. The usage ledger already records it, but that
+        // needs opening a JSON file to see; the operator watching the app could not
+        // tell a provider outage from a slow turn. `message` is the sanitised
+        // upstream error, so no credential from the provider body rides along.
+        logEvent("warn", "agent.upstream.failed", {
+          provider: upstream.provider,
+          upstreamModel: upstream.model,
+          modelId: model.id,
+          sessionId: opts.sessionId ?? null,
+          attempt,
+          streamedAnything,
+          willRetry,
+          errorMessage: message,
+        });
         // A failed request still gets a usage record — with no tokens and no
         // charge — so the failure is visible in accounting rather than only in a
         // transcript that may be gone by the time anyone looks.
@@ -367,7 +384,7 @@ export async function* runAgentTurn(opts: {
           status: "error",
           error: message,
         });
-        if (!streamedAnything && attempt === 0) {
+        if (willRetry) {
           attemptReasoning = undefined; // the retry answers instead of thinking
           request = beginRequest({
             sessionId: opts.sessionId ?? null,
