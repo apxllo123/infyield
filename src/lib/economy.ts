@@ -72,11 +72,18 @@ function save(e: EconomyFile): void {
   writeJson(FILE, e);
 }
 
+/**
+ * Append one entry to the book of record.
+ *
+ * Nothing is ever trimmed here. The file is what the attribution and the
+ * reconciliation sums read, so an entry that is dropped is revenue or spend that
+ * silently leaves the figures while the running totals keep it. `getState()` is
+ * the display surface, and it applies its own cap.
+ */
 function push(e: EconomyFile, entry: Omit<LedgerEntry, "id" | "ts">): void {
   const id = nextEntryId(e);
   e.nextEntryId = id + 1;
   e.entries.unshift({ id, ts: Date.now(), ...entry });
-  e.entries = e.entries.slice(0, LEDGER_ENTRY_CAP);
 }
 
 /** The highest id present in a set of entries, or 0 when there are none. */
@@ -92,12 +99,13 @@ function highestEntryId(entries: LedgerEntry[]): number {
 /**
  * The next entry id, from a counter that only ever moves forward.
  *
- * The id used to be `entries.length + 1`, which was right until the array hit
- * its 500-entry cap: from then on the length stayed at 500 while `slice` dropped
- * the oldest entry, so every new entry was issued id 501 — the same id the entry
- * already holding 501 had. Two ledger lines sharing an id are indistinguishable
- * to anything that keys on one (attribution, receipt matching, a correction
- * entry), which is why an id may not be derived from the array's current shape.
+ * The id used to be `entries.length + 1`, which held only while the array was
+ * never trimmed. It was trimmed at 500 entries, so from then on the length
+ * stayed at 500 while the oldest entry fell off the tail and every new entry was
+ * issued id 501 — the same id the entry already holding 501 had. Two ledger
+ * lines sharing an id are indistinguishable to anything that keys on one
+ * (attribution, receipt matching, a correction entry), which is why an id may
+ * not be derived from the array's current shape.
  *
  * A file written before this field existed has no counter. It is not migrated and
  * never rewritten just to add one: the fallback is one more than the highest id
@@ -298,16 +306,15 @@ export function getState(): EconomyState {
  * The whole ledger, untruncated.
  *
  * `getState().entries` is capped for display. Anything that sums entries
- * (per-campaign accrual, collectible revenue, spend-today) has to read them all,
- * or the figure silently stops growing once a busy day pushes old entries off
- * the tail — which would under-report what an advertiser actually owes.
+ * (per-campaign accrual, collectible revenue, spend-today, the reconciliation's
+ * own identities) has to read them all, or the figure silently stops growing
+ * once a busy day pushes old entries off the tail — which would under-report what
+ * an advertiser actually owes.
  *
- * The 500-entry cap `push()` applies is therefore a real limitation, not a
- * display one, and is called out here so nobody has to rediscover it: revenue
- * attribution beyond 500 entries needs a store that is not a JSON file.
+ * So this is a real contract and not a display concern, and `push()` keeps every
+ * entry to honour it. A ledger too large to hold in a JSON file is a case for a
+ * different store, not for shortening the history the sums read.
  */
 export function allEntries(): LedgerEntry[] {
   return load().entries;
 }
-
-const LEDGER_ENTRY_CAP = 500;
